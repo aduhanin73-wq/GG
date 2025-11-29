@@ -5,13 +5,12 @@ import logging
 from datetime import datetime, timedelta, time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import pytz
 
 # ===== НАСТРОЙКИ =====
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"  # ← ОБЯЗАТЕЛЬНО ЗАМЕНИ!
-TIMEZONE = "Europe/Moscow"  # Измени, если нужно
-MORNING_HOUR = 8  # Утреннее уведомление в 8:00 по местному времени
+BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"  # ← ЗАМЕНИ НА СВОЙ!
+TIMEZONE = "Europe/Moscow"
+MORNING_HOUR = 8
 
 DATA_FILE = "data/users.json"
 
@@ -192,20 +191,24 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("note", note))
     app.add_handler(CommandHandler("notes", notes))
-    app.add_handler(CommandHandler("напомни", remind))  # ← Русская команда!
+    app.add_handler(CommandHandler("напомни", remind))
 
     # Обычные сообщения
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Утренние уведомления
-    scheduler = AsyncIOScheduler(timezone=pytz.utc)
+    # УТРЕННЕЕ УВЕДОМЛЕНИЕ — через job_queue (без ошибок!)
     tz = pytz.timezone(TIMEZONE)
     now = datetime.now(tz)
-    utc_morning = now.replace(hour=MORNING_HOUR, minute=0, second=0, microsecond=0).astimezone(pytz.utc)
-    scheduler.add_job(send_morning_message, "cron", hour=utc_morning.hour, minute=0)
-    scheduler.start()
+    local_morning = now.replace(hour=MORNING_HOUR, minute=0, second=0, microsecond=0)
+    utc_morning = local_morning.astimezone(pytz.utc)
 
-    print("✅ Бот запущен! Все функции активны.")
+    app.job_queue.run_daily(
+        send_morning_message,
+        time=time(hour=utc_morning.hour, minute=0),
+        name="morning_greeting"
+    )
+
+    print("✅ Бот успешно запущен! Все функции активны.")
     app.run_polling()
 
 if __name__ == "__main__":
